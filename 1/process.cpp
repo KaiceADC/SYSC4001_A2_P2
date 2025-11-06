@@ -1,15 +1,16 @@
 #include <iostream>      // For cout/endl for printing
-#include <unistd.h>      // For fork() and sleep() system calls
+#include <unistd.h>      // For fork(), getpid(), and sleep() system calls
 #include <sys/types.h>   // For pid_t type
 #include <cstdlib>       // For exit() function
 
 // This function simulates Process 1's behavior.
 // It initializes a counter at 0 and increments it forever,
-// printing the value once per second.
+// printing the value once per second along with process identification.
 void process1() {
+    pid_t my_pid = getpid();
     int counter = 0;
     while (true) {
-        std::cout << "Process 1: Counter = " << counter << std::endl;
+        std::cout << "Process 1 (PID: " << my_pid << "): Counter = " << counter << std::endl;
         counter++;
         sleep(1); // Sleep for 1 second to slow output
     }
@@ -17,11 +18,12 @@ void process1() {
 
 // This function simulates Process 2's behavior.
 // It also initializes a counter at 0 and increments it forever,
-// printing the value once per second.
+// printing the value once per second along with process identification.
 void process2() {
+    pid_t my_pid = getpid();
     int counter = 0;
     while (true) {
-        std::cout << "Process 2: Counter = " << counter << std::endl;
+        std::cout << "Process 2 (PID: " << my_pid << "): Counter = " << counter << std::endl;
         counter++;
         sleep(1); // Sleep for 1 second to slow output
     }
