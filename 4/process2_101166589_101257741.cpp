@@ -45,15 +45,15 @@ void process2(SharedData* shared) {
 
 int main() {
     // Attach to shared memory created by Process 1
-    int shared_id = shmget(12345, sizeof(SharedData), 0);
+    int shmid = shmget(12345, sizeof(SharedData), 0);
     
-    if (shared_id == -1) {
+    if (shmid == -1) {
         perror("shmget failed in Process 2");
         exit(1);
     }
     
     // Attach to shared memory
-    SharedData* shared = (SharedData*) shmat(shared_id, NULL, 0);
+    SharedData* shared = (SharedData*) shmat(shmid, NULL, 0);
     
     if (shared == (SharedData*)-1) {
         perror("shmat failed in Process 2");

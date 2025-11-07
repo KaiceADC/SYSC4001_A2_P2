@@ -4,17 +4,14 @@
 #include <sys/wait.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sem.h>
 #include <cstdlib>
 #include <cstring>
 #include <signal.h>
 
-// Struct to hold shared memory data
+// Shared memory struct for communication
 struct SharedData {
-    // Multiple value - default 3, can be changed
     int multiple;
-    
-    // Counter from Process 1 - shared with Process 2
-    // Process 2 starts when this > 100
     int counter;
 };
 
@@ -24,18 +21,30 @@ void single_child(int sig) {
     child_exited = true;
 }
 
-// Process 1 - increments counter and updates shared memory
-void process1(SharedData* shared) {
+// P (wait) operation on semaphore
+void semWait(int semid) {
+    struct sembuf p = {0, -1, SEM_UNDO};
+    semop(semid, &p, 1);
+}
+
+// V (signal) operation on semaphore
+void semSignal(int semid) {
+    struct sembuf v = {0, 1, SEM_UNDO};
+    semop(semid, &v, 1);
+}
+
+void process1(SharedData* shared, int semid) {
     pid_t my_id = getpid();
     int counter = 0;
     int num_cycles = 0;
-    
-    // Run until child exits
-    while (!child_exited) {
-        // Update the shared counter
+
+    while (!child_exited && counter <= 500) {
+        // ENTER CRITICAL SECTION
+        semWait(semid);
+
         shared->counter = counter;
-        
-        // Display if multiple of the shared multiple value
+
+        // Output logic
         if (counter % shared->multiple == 0) {
             std::cout << "Process 1 (PID: " << my_id << "): Cycle " 
                       << num_cycles << " -- " << counter 
@@ -43,62 +52,50 @@ void process1(SharedData* shared) {
         } else {
             std::cout << "Process 1 (PID: " << my_id << "): Cycle " << num_cycles << std::endl;
         }
-        
+
+        // LEAVE CRITICAL SECTION
+        semSignal(semid);
+
         counter++;
         num_cycles++;
         sleep(1);
     }
-    
-    std::cout << "Process 1 (PID: " << my_id << "): Counter exceeded 500. Exiting." << std::endl;
+    std::cout << "Process 1 (PID: " << my_id << "): Exiting." << std::endl;
 }
 
 int main() {
     signal(SIGCHLD, single_child);
-    
-    // Create shared memory segment
-    int shared_id = shmget(12345, sizeof(SharedData), IPC_CREAT | 0666);
-    
-    if (shared_id == -1) {
-        perror("shmget failed");
-        exit(1);
-    }
-    
-    // Attach to shared memory
-    SharedData* shared = (SharedData*) shmat(shared_id, NULL, 0);
-    
-    if (shared == (SharedData*)-1) {
-        perror("shmat failed");
-        exit(1);
-    }
-    
-    // Initialize shared data
-    shared->multiple = 3;  // Can be changed here
+
+    // Make shared memory
+    int shmid = shmget(12345, sizeof(SharedData), IPC_CREAT | 0666);
+    if (shmid == -1) { perror("shmget failed"); exit(1); }
+    SharedData* shared = (SharedData*)shmat(shmid, NULL, 0);
+    if (shared == (SharedData*)-1) { perror("shmat failed"); exit(1); }
+    shared->multiple = 3;
     shared->counter = 0;
-    
+
+    // Create semaphore for mutual exclusion
+    int semid = semget(54321, 1, IPC_CREAT | 0666);
+    if (semid == -1) { perror("semget failed"); exit(1); }
+    semctl(semid, 0, SETVAL, 1); // Initialize to 1
+
     pid_t child = fork();
-    
+
     if (child == 0) {
-        // Child becomes Process 2
         execl("./process2", "process2", NULL);
         perror("execl error");
         exit(1);
-    } 
-    else if (child > 0) {
-        // Parent runs Process 1
-        process1(shared);
-        
+    } else if (child > 0) {
+        process1(shared, semid);
         wait(NULL);
-        
-        // Cleanup shared memory
+
         shmdt(shared);
-        shmctl(shared_id, IPC_RMID, NULL);
-        
+        shmctl(shmid, IPC_RMID, NULL);
+        semctl(semid, 0, IPC_RMID); // Clean up semaphore
         exit(0);
-    } 
-    else {
+    } else {
         perror("fork error");
         exit(1);
     }
-    
     return 0;
 }

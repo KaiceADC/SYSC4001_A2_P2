@@ -49,7 +49,7 @@ int main() {
     // Child process code
     if (child == 0) {
         // Replace this process with process2 executable
-        execl("./process2", "process2", NULL);
+        execl("./process2_101166589_101255741", "process2_101166589_101255741", NULL);
         
         // If we get here, execl failed
         perror("execl error");

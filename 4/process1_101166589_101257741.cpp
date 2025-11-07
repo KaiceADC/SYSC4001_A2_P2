@@ -56,15 +56,15 @@ int main() {
     signal(SIGCHLD, single_child);
     
     // Create shared memory segment
-    int shared_id = shmget(12345, sizeof(SharedData), IPC_CREAT | 0666);
+    int shmid = shmget(12345, sizeof(SharedData), IPC_CREAT | 0666);
     
-    if (shared_id == -1) {
+    if (shmid == -1) {
         perror("shmget failed");
         exit(1);
     }
     
     // Attach to shared memory
-    SharedData* shared = (SharedData*) shmat(shared_id, NULL, 0);
+    SharedData* shared = (SharedData*) shmat(shmid, NULL, 0);
     
     if (shared == (SharedData*)-1) {
         perror("shmat failed");
@@ -91,7 +91,7 @@ int main() {
         
         // Cleanup shared memory
         shmdt(shared);
-        shmctl(shared_id, IPC_RMID, NULL);
+        shmctl(shmid, IPC_RMID, NULL);
         
         exit(0);
     } 

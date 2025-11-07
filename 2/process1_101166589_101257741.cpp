@@ -35,7 +35,7 @@ int main() {
     if (child_pid == 0) {
         // This is the child process
         // Execute the second program which will replace this process
-        execl("./process2", "process2", NULL);
+        execl("./process2_101166589_101255741", "process2_101166589_101255741", NULL);
         
         // If execl fails, print error
         perror("execl");

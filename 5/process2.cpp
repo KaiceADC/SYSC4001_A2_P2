@@ -3,68 +3,76 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/sem.h>
 #include <cstdlib>
+#include <cstring>
 
 struct SharedData {
     int multiple;
     int counter;
 };
 
-void process2(SharedData* shared) {
+void semWait(int semid) {
+    struct sembuf p = {0, -1, SEM_UNDO};
+    semop(semid, &p, 1);
+}
+void semSignal(int semid) {
+    struct sembuf v = {0, 1, SEM_UNDO};
+    semop(semid, &v, 1);
+}
+
+void process2(SharedData* shared, int semid) {
     pid_t my_id = getpid();
     int num_cycles = 0;
-    
-    // Wait until Process 1's counter exceeds 100
-    while (shared->counter <= 100) {
+
+    // Wait until Process 1's counter > 100
+    while (true) {
+        semWait(semid);
+        int cval = shared->counter;
+        semSignal(semid);
+
+        if (cval > 100) break;
+
         std::cout << "Process 2 (PID: " << my_id << "): Waiting for counter > 100 (current: " 
-                  << shared->counter << ")" << std::endl;
+                  << cval << ")" << std::endl;
         sleep(1);
     }
-    
-    // When counter > 100, start processing
+
     std::cout << "Process 2 (PID: " << my_id << "): Counter > 100! Starting..." << std::endl;
-    
-    // Keep running while counter <= 500
-    while (shared->counter <= 500) {
-        // Display if multiple of the shared multiple value
-        if (shared->counter % shared->multiple == 0) {
+
+    // React to value in shared memory, stop when > 500
+    while (true) {
+        semWait(semid);
+        int cval = shared->counter;
+        int mval = shared->multiple;
+        semSignal(semid);
+
+        if (cval > 500) break;
+
+        if (cval % mval == 0) {
             std::cout << "Process 2 (PID: " << my_id << "): Cycle " 
-                      << num_cycles << " -- " << shared->counter 
-                      << " (multiple of " << shared->multiple << ")" << std::endl;
+                      << num_cycles << " -- " << cval 
+                      << " (multiple of " << mval << ")" << std::endl;
         } else {
             std::cout << "Process 2 (PID: " << my_id << "): Cycle " << num_cycles << std::endl;
         }
-        
         num_cycles++;
         sleep(1);
     }
-    
-    // When counter exceeds 500, exit
     std::cout << "Process 2 (PID: " << my_id << "): Counter exceeded 500. Exiting." << std::endl;
 }
 
 int main() {
-    // Attach to shared memory created by Process 1
-    int shared_id = shmget(12345, sizeof(SharedData), 0);
-    
-    if (shared_id == -1) {
-        perror("shmget failed in Process 2");
-        exit(1);
-    }
-    
-    // Attach to shared memory
-    SharedData* shared = (SharedData*) shmat(shared_id, NULL, 0);
-    
-    if (shared == (SharedData*)-1) {
-        perror("shmat failed in Process 2");
-        exit(1);
-    }
-    
-    // Run Process 2
-    process2(shared);
-    
-    // Detach from shared memory
+    int shmid = shmget(12345, sizeof(SharedData), 0);
+    if (shmid == -1) { perror("shmget failed"); exit(1); }
+    SharedData* shared = (SharedData*)shmat(shmid, NULL, 0);
+    if (shared == (SharedData*)-1) { perror("shmat failed"); exit(1); }
+
+    int semid = semget(54321, 1, 0);
+    if (semid == -1) { perror("semget failed"); exit(1); }
+
+    process2(shared, semid);
+
     shmdt(shared);
-    
     return 0;
 }
